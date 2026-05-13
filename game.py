@@ -1,21 +1,23 @@
 import random
 import tkinter as tk
 
-try:
-    from .constants import CELL, COLORS, COLS, EMPTY, HEIGHT, ROWS, SHAPES, WIDTH
-    from .piece import Tetromino
-    from .ranking import load_rankings, record_score
-except ImportError:
-    from constants import CELL, COLORS, COLS, EMPTY, HEIGHT, ROWS, SHAPES, WIDTH
-    from piece import Tetromino
-    from ranking import load_rankings, record_score
+# try:
+#     from .constants import CELL, COLORS, COLS, EMPTY, HEIGHT, ROWS, SHAPES, WIDTH, GAME_TITLE
+#     from .piece import Tetromino
+#     from .ranking import load_rankings, record_score
+#     from .texts import LANGUAGE_NAMES, TEXTS_BY_LANGUAGE
+# except ImportError:
+from constants import CELL, COLORS, COLS, EMPTY, HEIGHT, ROWS, SHAPES, WIDTH, GAME_TITLE
+from piece import Tetromino
+from ranking import load_rankings, record_score
+from texts import LANGUAGE_NAMES, TEXTS_BY_LANGUAGE
 
 
 class TetrisGame:
     def __init__(self):
         # ウィンドウとゲーム状態を初期化
         self.root = tk.Tk()
-        self.root.title("Tetris")
+        self.root.title(TEXTS_BY_LANGUAGE["en"]["window_title"])
         self.root.resizable(False, False)
 
         self.canvas = tk.Canvas(
@@ -35,21 +37,23 @@ class TetrisGame:
         self.ranking_recorded = False
 
         self.config = {
+            "language": "en",
             "preview_count": 1,
             "fall_speed": 650,
             "rotate_direction": 1,
             "button_layout": "Shift",
         }
 
-        self.menu_items = ["Play Start", "Config", "How To Play", "Ranking", "Exit"]
-        self.pause_items = ["Resume", "Retire"]
-        self.confirm_items = ["No", "Yes"]
+        self.menu_items = ["play", "config", "help", "ranking", "exit"]
+        self.pause_items = ["resume", "retire"]
+        self.confirm_items = ["no", "yes"]
         self.config_items = [
-            "Preview Count",
-            "Fall Speed",
-            "Space Rotate",
-            "Reserve Key",
-            "Back",
+            "language",
+            "preview_count",
+            "fall_speed",
+            "rotate_direction",
+            "hold_key",
+            "back",
         ]
 
         self.board = []
@@ -61,6 +65,18 @@ class TetrisGame:
         self.lines = 0
 
         self.draw_menu()
+
+    @property
+    def texts(self):
+        # 現在の言語設定に合った表示テキストを返す
+        return TEXTS_BY_LANGUAGE[self.config["language"]]
+
+    def ui_font(self, size, weight=None):
+        # 日本語表示では読みやすい日本語フォントを優先する
+        family = "Mintyo" if self.config["language"] == "ja" else "Consolas"
+        if weight:
+            return (family, size, weight)
+        return (family, size)
 
     def run(self):
         # Tkinterのメインループを開始
@@ -236,14 +252,35 @@ class TetrisGame:
 
     def game_over(self):
         # ゲームを終了してスコアを記録
+        texts = self.texts
         self.cancel_tick()
         self.state = "gameover"
         self.record_ranking()
         self.draw_game()
-        self.canvas.create_rectangle(45, 210, COLS * CELL - 45, 375, fill="#10131a", outline="#f2d94e", width=2)
-        self.canvas.create_text(COLS * CELL // 2, 255, text="GAME OVER", fill="#ffffff", font=("Consolas", 24, "bold"))
-        self.canvas.create_text(COLS * CELL // 2, 305, text=f"Score: {self.score}", fill="#cfd6e6", font=("Consolas", 15, "bold"))
-        self.canvas.create_text(COLS * CELL // 2, 340, text="Enter: Menu", fill="#cfd6e6", font=("Consolas", 14))
+        self.canvas.create_rectangle(
+            45, 210, COLS * CELL - 45, 375, fill="#10131a", outline="#f2d94e", width=2
+        )
+        self.canvas.create_text(
+            COLS * CELL // 2,
+            255,
+            text=texts["game_over"]["title"],
+            fill="#ffffff",
+            font=self.ui_font(24, "bold"),
+        )
+        self.canvas.create_text(
+            COLS * CELL // 2,
+            305,
+            text=texts["game_over"]["score"].format(score=self.score),
+            fill="#cfd6e6",
+            font=self.ui_font(15, "bold"),
+        )
+        self.canvas.create_text(
+            COLS * CELL // 2,
+            340,
+            text=texts["game_over"]["footer"],
+            fill="#cfd6e6",
+            font=self.ui_font(14),
+        )
 
     def record_ranking(self):
         # 現在のスコアを1回だけランキングに追加
@@ -286,19 +323,19 @@ class TetrisGame:
             self.draw_menu()
         elif key == "Return":
             item = self.menu_items[self.selected]
-            if item == "Play Start":
+            if item == "play":
                 self.start_game()
-            elif item == "Config":
+            elif item == "config":
                 self.state = "config"
                 self.selected = 0
                 self.draw_config()
-            elif item == "How To Play":
+            elif item == "help":
                 self.state = "help"
                 self.draw_help()
-            elif item == "Ranking":
+            elif item == "ranking":
                 self.state = "ranking"
                 self.draw_ranking()
-            elif item == "Exit":
+            elif item == "exit":
                 self.root.destroy()
 
     def handle_config_key(self, key):
@@ -313,7 +350,7 @@ class TetrisGame:
             self.change_config(-1 if key == "Left" else 1)
             self.draw_config()
         elif key == "Return":
-            if self.config_items[self.selected] == "Back":
+            if self.config_items[self.selected] == "back":
                 self.state = "menu"
                 self.selected = 0
                 self.draw_menu()
@@ -328,15 +365,20 @@ class TetrisGame:
     def change_config(self, step):
         # 選択中の設定項目を変更
         item = self.config_items[self.selected]
-        if item == "Preview Count":
+        if item == "language":
+            languages = list(TEXTS_BY_LANGUAGE)
+            index = languages.index(self.config["language"])
+            self.config["language"] = languages[(index + step) % len(languages)]
+            self.root.title(self.texts["window_title"])
+        elif item == "preview_count":
             self.config["preview_count"] = (self.config["preview_count"] + step) % 3
-        elif item == "Fall Speed":
+        elif item == "fall_speed":
             speeds = [900, 650, 400, 220]
             index = speeds.index(self.config["fall_speed"])
             self.config["fall_speed"] = speeds[(index + step) % len(speeds)]
-        elif item == "Space Rotate":
+        elif item == "rotate_direction":
             self.config["rotate_direction"] *= -1
-        elif item == "Reserve Key":
+        elif item == "hold_key":
             layouts = ["Shift", "Tab", "C"]
             index = layouts.index(self.config["button_layout"])
             self.config["button_layout"] = layouts[(index + step) % len(layouts)]
@@ -383,7 +425,7 @@ class TetrisGame:
             self.selected = (self.selected + 1) % len(self.pause_items)
             self.draw_pause()
         elif key == "Return":
-            if self.pause_items[self.selected] == "Resume":
+            if self.pause_items[self.selected] == "resume":
                 self.resume_game()
             else:
                 self.state = "retire_confirm"
@@ -398,7 +440,7 @@ class TetrisGame:
             self.selected = (self.selected + 1) % len(self.confirm_items)
             self.draw_retire_confirm()
         elif key == "Return":
-            if self.confirm_items[self.selected] == "Yes":
+            if self.confirm_items[self.selected] == "yes":
                 self.retire_game()
             else:
                 self.state = "paused"
@@ -411,83 +453,177 @@ class TetrisGame:
 
     def draw_menu(self):
         # スタートメニューを描画
+        texts = self.texts
         self.canvas.delete("all")
         self.canvas.create_rectangle(0, 0, WIDTH, HEIGHT, fill="#151820", outline="")
-        self.canvas.create_text(WIDTH // 2, 105, text="TETRIS", fill="#ffffff", font=("Consolas", 38, "bold"))
-        self.draw_vertical_menu(self.menu_items, 215, 45)
+        self.canvas.create_text(
+            WIDTH // 2,
+            105,
+            text=GAME_TITLE,
+            fill="#ffffff",
+            font=("Arial Black", 38, "bold"),
+        )
+        self.draw_vertical_menu(
+            [texts["menu"][item] for item in self.menu_items], 215, 45
+        )
 
     def draw_config(self):
         # 設定画面を描画
+        texts = self.texts
         self.canvas.delete("all")
         self.canvas.create_rectangle(0, 0, WIDTH, HEIGHT, fill="#151820", outline="")
-        self.canvas.create_text(WIDTH // 2, 70, text="CONFIG", fill="#ffffff", font=("Consolas", 30, "bold"))
+        self.canvas.create_text(
+            WIDTH // 2,
+            70,
+            text=texts["config"]["title"],
+            fill="#ffffff",
+            font=self.ui_font(30, "bold"),
+        )
 
         values = {
-            "Preview Count": str(self.config["preview_count"]),
-            "Fall Speed": f"{self.config['fall_speed']} ms",
-            "Space Rotate": "Clockwise" if self.config["rotate_direction"] > 0 else "Counter",
-            "Reserve Key": self.config["button_layout"],
-            "Back": "",
+            "language": LANGUAGE_NAMES[self.config["language"]],
+            "preview_count": str(self.config["preview_count"]),
+            "fall_speed": texts["speed_names"].get(
+                self.config["fall_speed"], str(self.config["fall_speed"])
+            ),
+            "rotate_direction": (
+                texts["config"]["clockwise"]
+                if self.config["rotate_direction"] > 0
+                else texts["config"]["counter"]
+            ),
+            "hold_key": self.config["button_layout"],
+            "back": "",
         }
-        items = [f"{item}: {values[item]}" if values[item] else item for item in self.config_items]
+        items = [
+            (
+                f"{texts['config'][item]}: {values[item]}"
+                if values[item]
+                else texts["config"][item]
+            )
+            for item in self.config_items
+        ]
         self.draw_vertical_menu(items, 155, 45)
         self.canvas.create_text(
             WIDTH // 2,
             HEIGHT - 55,
-            text="Left/Right or Enter: Change    Esc: Back",
+            text=texts["config"]["footer"],
             fill="#8f9bb3",
-            font=("Consolas", 11),
+            font=self.ui_font(11),
         )
 
     def draw_help(self):
         # 遊び方画面を描画
+        texts = self.texts
         self.canvas.delete("all")
         self.canvas.create_rectangle(0, 0, WIDTH, HEIGHT, fill="#151820", outline="")
-        self.canvas.create_text(WIDTH // 2, 55, text="HOW TO PLAY", fill="#ffffff", font=("Consolas", 28, "bold"))
+        self.canvas.create_text(
+            WIDTH // 2,
+            55,
+            text=texts["help"]["title"],
+            fill="#ffffff",
+            font=self.ui_font(28, "bold"),
+        )
         lines = [
-            "Left / Right : Move",
-            "Down         : Soft drop (+1)",
-            "Up           : Hard drop (+2 per cell)",
-            "Space        : Rotate",
-            f"{self.config['button_layout']:<12} : Reserve / Swap",
-            "Enter        : Pause",
-            "",
-            "Fill a horizontal line to clear it.",
-            "Cross the top deadline and the game ends.",
-            "",
-            "Enter / Esc  : Back",
+            line.format(hold_key=self.config["button_layout"])
+            for line in texts["help"]["lines"]
         ]
         for i, text in enumerate(lines):
-            self.canvas.create_text(75, 120 + i * 32, anchor="w", text=text, fill="#cfd6e6", font=("Consolas", 14))
+            self.canvas.create_text(
+                75,
+                120 + i * 32,
+                anchor="w",
+                text=text,
+                fill="#cfd6e6",
+                font=self.ui_font(14),
+            )
 
     def draw_ranking(self):
         # ランキング画面を描画
+        texts = self.texts
         self.canvas.delete("all")
         self.canvas.create_rectangle(0, 0, WIDTH, HEIGHT, fill="#151820", outline="")
-        self.canvas.create_text(WIDTH // 2, 65, text="RANKING", fill="#ffffff", font=("Consolas", 30, "bold"))
+        self.canvas.create_text(
+            WIDTH // 2,
+            65,
+            text=texts["ranking"]["title"],
+            fill="#ffffff",
+            font=self.ui_font(30, "bold"),
+        )
         rankings = load_rankings()
         if not rankings:
-            self.canvas.create_text(WIDTH // 2, 220, text="No records yet", fill="#cfd6e6", font=("Consolas", 18))
+            self.canvas.create_text(
+                WIDTH // 2,
+                220,
+                text=texts["ranking"]["empty"],
+                fill="#cfd6e6",
+                font=self.ui_font(18),
+            )
         else:
             for i, row in enumerate(rankings[:5], start=1):
                 line = f"{i}: {row.get('score', 0)}: {row.get('date', '----/--/--')}"
-                self.canvas.create_text(WIDTH // 2, 140 + i * 48, text=line, fill="#cfd6e6", font=("Consolas", 18, "bold"))
-        self.canvas.create_text(WIDTH // 2, HEIGHT - 55, text="Enter / Esc: Back", fill="#8f9bb3", font=("Consolas", 12))
+                self.canvas.create_text(
+                    WIDTH // 2,
+                    140 + i * 48,
+                    text=line,
+                    fill="#cfd6e6",
+                    font=self.ui_font(18, "bold"),
+                )
+        self.canvas.create_text(
+            WIDTH // 2,
+            HEIGHT - 55,
+            text=texts["ranking"]["footer"],
+            fill="#8f9bb3",
+            font=self.ui_font(12),
+        )
 
     def draw_pause(self):
         # ゲーム画面の上に一時停止表示を描画
+        texts = self.texts
         self.draw_game()
-        self.canvas.create_rectangle(60, 165, COLS * CELL - 60, 385, fill="#10131a", outline="#f2d94e", width=2)
-        self.canvas.create_text(COLS * CELL // 2, 210, text="PAUSE", fill="#ffffff", font=("Consolas", 25, "bold"))
-        self.draw_vertical_menu(self.pause_items, 275, 48, center_x=COLS * CELL // 2)
+        self.canvas.create_rectangle(
+            60, 165, COLS * CELL - 60, 385, fill="#10131a", outline="#f2d94e", width=2
+        )
+        self.canvas.create_text(
+            COLS * CELL // 2,
+            210,
+            text=texts["pause"]["title"],
+            fill="#ffffff",
+            font=self.ui_font(25, "bold"),
+        )
+        self.draw_vertical_menu(
+            [texts["pause"][item] for item in self.pause_items],
+            275,
+            48,
+            center_x=COLS * CELL // 2,
+        )
 
     def draw_retire_confirm(self):
         # リタイア確認表示を描画
+        texts = self.texts
         self.draw_game()
-        self.canvas.create_rectangle(25, 150, COLS * CELL - 25, 405, fill="#10131a", outline="#ef5a68", width=2)
-        self.canvas.create_text(COLS * CELL // 2, 195, text="Retire this game?", fill="#ffffff", font=("Consolas", 15, "bold"))
-        self.canvas.create_text(COLS * CELL // 2, 240, text="This result will not be recorded.", fill="#cfd6e6", font=("Consolas", 11))
-        self.draw_vertical_menu(self.confirm_items, 305, 42, center_x=COLS * CELL // 2)
+        self.canvas.create_rectangle(
+            25, 150, COLS * CELL - 25, 405, fill="#10131a", outline="#ef5a68", width=2
+        )
+        self.canvas.create_text(
+            COLS * CELL // 2,
+            195,
+            text=texts["retire"]["title"],
+            fill="#ffffff",
+            font=self.ui_font(15, "bold"),
+        )
+        self.canvas.create_text(
+            COLS * CELL // 2,
+            240,
+            text=texts["retire"]["message"],
+            fill="#cfd6e6",
+            font=self.ui_font(11),
+        )
+        self.draw_vertical_menu(
+            [texts["retire"][item] for item in self.confirm_items],
+            305,
+            42,
+            center_x=COLS * CELL // 2,
+        )
 
     def draw_vertical_menu(self, items, start_y, gap, center_x=None):
         # 共通の縦メニューを描画
@@ -496,7 +632,13 @@ class TetrisGame:
             y = start_y + i * gap
             fill = "#f2d94e" if i == self.selected else "#cfd6e6"
             prefix = "> " if i == self.selected else "  "
-            self.canvas.create_text(center_x, y, text=prefix + item, fill=fill, font=("Consolas", 18, "bold"))
+            self.canvas.create_text(
+                center_x,
+                y,
+                text=prefix + item,
+                fill=fill,
+                font=self.ui_font(18, "bold"),
+            )
 
     def draw_game(self):
         # 盤面とサイドパネルと操作中テトリミノを描画
@@ -511,7 +653,9 @@ class TetrisGame:
 
     def draw_board(self):
         # 固定ブロックと盤面グリッドを描画
-        self.canvas.create_rectangle(0, 0, COLS * CELL, HEIGHT, fill="#10131a", outline="#343b4c")
+        self.canvas.create_rectangle(
+            0, 0, COLS * CELL, HEIGHT, fill="#10131a", outline="#343b4c"
+        )
         for y in range(ROWS):
             for x in range(COLS):
                 kind = self.board[y][x]
@@ -520,30 +664,71 @@ class TetrisGame:
                 else:
                     x1 = x * CELL
                     y1 = y * CELL
-                    self.canvas.create_rectangle(x1, y1, x1 + CELL, y1 + CELL, outline="#202633", width=1)
+                    self.canvas.create_rectangle(
+                        x1, y1, x1 + CELL, y1 + CELL, outline="#202633", width=1
+                    )
         self.canvas.create_line(0, 0, COLS * CELL, 0, fill="#ef5a68", width=3)
 
     def draw_cell(self, x, y, color):
         # 盤面の1マスを描画
         x1 = x * CELL
         y1 = y * CELL
-        self.canvas.create_rectangle(x1 + 2, y1 + 2, x1 + CELL - 2, y1 + CELL - 2, fill=color, outline="#e9edf5", width=1)
-        self.canvas.create_rectangle(x1 + 5, y1 + 5, x1 + CELL - 5, y1 + CELL - 5, outline="#ffffff", width=1)
+        self.canvas.create_rectangle(
+            x1 + 2,
+            y1 + 2,
+            x1 + CELL - 2,
+            y1 + CELL - 2,
+            fill=color,
+            outline="#e9edf5",
+            width=1,
+        )
+        self.canvas.create_rectangle(
+            x1 + 5, y1 + 5, x1 + CELL - 5, y1 + CELL - 5, outline="#ffffff", width=1
+        )
 
     def draw_side_panel(self):
         # ホールドや次ピースやスコアを描画
+        texts = self.texts
         x0 = COLS * CELL
         self.canvas.create_rectangle(x0, 0, WIDTH, HEIGHT, fill="#1d2230", outline="")
-        self.canvas.create_text(x0 + 22, 30, anchor="w", text="HOLD", fill="#ffffff", font=("Consolas", 15, "bold"))
+        self.canvas.create_text(
+            x0 + 22,
+            30,
+            anchor="w",
+            text=texts["side_panel"]["hold"],
+            fill="#ffffff",
+            font=self.ui_font(15, "bold"),
+        )
         if self.hold_piece:
             self.draw_preview(self.hold_piece, x0 + 45, 54)
 
-        self.canvas.create_text(x0 + 22, 165, anchor="w", text="NEXT", fill="#ffffff", font=("Consolas", 15, "bold"))
+        self.canvas.create_text(
+            x0 + 22,
+            165,
+            anchor="w",
+            text=texts["side_panel"]["next"],
+            fill="#ffffff",
+            font=self.ui_font(15, "bold"),
+        )
         for i, piece in enumerate(self.queue[: self.config["preview_count"]]):
             self.draw_preview(piece, x0 + 45, 190 + i * 95, scale=20)
 
-        self.canvas.create_text(x0 + 22, 410, anchor="w", text=f"SCORE\n{self.score}", fill="#cfd6e6", font=("Consolas", 14, "bold"))
-        self.canvas.create_text(x0 + 22, 490, anchor="w", text=f"LINES\n{self.lines}", fill="#cfd6e6", font=("Consolas", 14, "bold"))
+        self.canvas.create_text(
+            x0 + 22,
+            410,
+            anchor="w",
+            text=texts["side_panel"]["score"].format(score=self.score),
+            fill="#cfd6e6",
+            font=self.ui_font(14, "bold"),
+        )
+        self.canvas.create_text(
+            x0 + 22,
+            490,
+            anchor="w",
+            text=texts["side_panel"]["lines"].format(lines=self.lines),
+            fill="#cfd6e6",
+            font=self.ui_font(14, "bold"),
+        )
 
     def draw_preview(self, piece, px, py, scale=22):
         # 小さなテトリミノのプレビューを描画
@@ -558,4 +743,11 @@ class TetrisGame:
         for bx, by in blocks:
             x1 = px + (bx - min_x) * scale + offset_x
             y1 = py + (by - min_y) * scale + offset_y
-            self.canvas.create_rectangle(x1 + 2, y1 + 2, x1 + scale - 2, y1 + scale - 2, fill=COLORS[piece.kind], outline="#e9edf5")
+            self.canvas.create_rectangle(
+                x1 + 2,
+                y1 + 2,
+                x1 + scale - 2,
+                y1 + scale - 2,
+                fill=COLORS[piece.kind],
+                outline="#e9edf5",
+            )

@@ -1,4 +1,8 @@
 # tetris/constants.py
+
+# タイトル題字の定義
+GAME_TITLE = "Tetris"
+
 # テトリミノのパラメータを設定
 
 CELL = 30
